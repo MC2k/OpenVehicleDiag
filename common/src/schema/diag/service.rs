@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::VecDeque, convert::TryInto, string::FromUtf8Error};
+use std::{cmp::min, convert::TryInto, string::FromUtf8Error};
 use bit_field::BitArray;
 use serde::{Serialize, Deserialize};
 use super::{DataFormat, StringEncoding};

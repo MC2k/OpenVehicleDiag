@@ -1,7 +1,7 @@
 use crate::themes::{button_coloured, container, text, toggle_theme, ButtonType, TextType};
 use crate::windows::cantracer::{CanTracer, TracerMessage};
 use crate::windows::diag_home::DiagHomeMessage;
-use crate::windows::home::{Home, HomeMessage};
+use crate::windows::home::Home;
 use crate::windows::launcher::{Launcher, LauncherMessage};
 use crate::windows::obd::{OBDHome, OBDMessage};
 use crate::{
@@ -13,7 +13,6 @@ use iced::{
     Length, Row, Rule, Space, Subscription, Text,
 };
 use std::fmt::Debug;
-use std::time::Instant;
 
 use super::diag_home::DiagHome;
 
@@ -57,7 +56,7 @@ pub enum WindowStateName {
 }
 
 impl<'a> WindowState {
-    fn view(&mut self) -> Element<WindowMessage> {
+    fn view(&mut self) -> Element<'_, WindowMessage> {
         match self {
             Self::Launcher(launcher) => launcher.view().map(WindowMessage::Launcher),
             Self::Home(home) => home.view(),
@@ -114,7 +113,7 @@ pub enum WindowMessage {
     DiagHome(DiagHomeMessage),
     OBDTools(OBDMessage),
     StartApp(Box<dyn ComServer>),
-    StatusUpdate(Instant),
+    StatusUpdate,
     GoHome,      // Goto home page
     GoCanTracer, // Goto Can Tracer page
     GoUDS,       // Goto UDS Scanner page
@@ -172,7 +171,7 @@ impl Application for MainWindow {
         _clipboard: &mut Clipboard,
     ) -> Command<WindowMessage> {
         match message {
-            WindowMessage::StatusUpdate(_) => {
+            WindowMessage::StatusUpdate => {
                 // On request for battery voltage reading, try to read from the adapter, but it might timeout
                 // if the driver is under heady IO load, so then use the current voltage reading
                 self.voltage = self
@@ -208,7 +207,7 @@ impl Application for MainWindow {
             let mut batch: Vec<Subscription<WindowMessage>> = vec![];
             if self.poll_voltage {
                 batch.push(
-                    time::every(std::time::Duration::from_secs(2)).map(WindowMessage::StatusUpdate),
+                    time::every(std::time::Duration::from_secs(2)).map(|_| WindowMessage::StatusUpdate),
                 );
             }
             // See if either other pages request update

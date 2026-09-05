@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, cmp::min, sync::Arc, vec};
+use std::{cmp::min, sync::Arc, vec};
 
 use lazy_static::lazy_static;
 
@@ -17,6 +17,8 @@ enum OBDDataType {
     String,
 }
 
+// Retain decoded PID values for live-data views not yet wired into the UI.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum PidReturnType<'a> {
     Number(PidResult<'a>),
@@ -39,7 +41,7 @@ unsafe impl Send for PidConvert {}
 unsafe impl Sync for PidConvert {}
 
 impl PidConvert {
-    fn parse(&self, args: [u8; 4]) -> PidReturnType {
+    fn parse(&self, args: [u8; 4]) -> PidReturnType<'_> {
         match self.data_type {
             OBDDataType::Number => PidReturnType::Number(PidResult {
                 desc: self.desc[0],
@@ -78,6 +80,8 @@ impl PidConvert {
     }
 }
 
+// Retain values, units, and plotting bounds for future live-data consumers.
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub struct PidResult<'a> {
     desc: &'a str,
@@ -782,7 +786,9 @@ impl PidList {
         })
     }
 
-    pub fn parse_pid(&self, pid: u8, args: &[u8]) -> Option<PidReturnType> {
+    // Keep PID decoding available independently of the current UI.
+    #[allow(dead_code)]
+    pub fn parse_pid(&self, pid: u8, args: &[u8]) -> Option<PidReturnType<'_>> {
         let parser = self.pids[pid as usize].as_ref()?;
         let len = min(4, args.len());
         let mut n: [u8; 4] = [0x00; 4];
@@ -958,7 +964,9 @@ impl Service01 {
         }
     }
 
-    pub fn get_chartable_pid(&self, s: &ObdServer, pid: u8) -> OBDError<Option<PidReturnType>> {
+    // Retain live PID acquisition until charting is exposed by the UI.
+    #[allow(dead_code)]
+    pub fn get_chartable_pid(&self, s: &ObdServer, pid: u8) -> OBDError<Option<PidReturnType<'_>>> {
         self.check_service_supported(pid)?;
         let bytes = s.run_command(0x01, &[pid])?;
         Ok(PID_LIST.parse_pid(pid, &bytes[2..]))

@@ -15,11 +15,6 @@ pub const LAUNCHER_IMG_DARK: &[u8] = include_bytes!("../../img/logo_dark.png");
 #[cfg(windows)]
 pub const LAUNCHER_IMG_DARK: &[u8] = include_bytes!("..\\..\\img\\logo_dark.png");
 
-#[cfg(unix)]
-pub const TRAY_ICON_DARK: &[u8] = include_bytes!("../../img/launcher_dark.png");
-#[cfg(windows)]
-pub const TRAY_ICON_DARK: &[u8] = include_bytes!("..\\..\\img\\launcher_dark.png");
-
 pub fn get_launcher_image() -> iced::Image {
     match super::get_theme() {
         super::Style::Light => pix_to_iced_image(LAUNCHER_IMG_LIGHT),

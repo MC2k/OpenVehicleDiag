@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, panic, time};
+use std::{fs::File, io::Write, panic};
 use backtrace;
 
 use dialog::DialogBox;
@@ -45,7 +45,7 @@ fn main() -> iced::Result {
         report.push_str("\n----\n");
         let time = chrono::Utc::now();
         let path = std::env::current_dir().unwrap().join(format!("ovd_crash-{}.txt", time.format("%F-%H_%M_%S")));
-        let write_res = File::create(&path).unwrap().write_all(report.as_bytes());
+        let _ = File::create(&path).unwrap().write_all(report.as_bytes());
 
         let mut summary = format!("Reason: {}\n", info);
         summary.push_str(format!("Crash report written to {}\n", &path.as_os_str().to_str().unwrap()).as_str());

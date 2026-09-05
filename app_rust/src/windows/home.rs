@@ -4,9 +4,6 @@ use crate::windows::window::WindowMessage;
 use iced::{button, Align, Column, Element, Length, Row, Rule, Space, Text};
 
 #[derive(Debug, Clone)]
-pub enum HomeMessage {}
-
-#[derive(Debug, Clone)]
 pub struct Home {
     server: Box<dyn ComServer>,
     can_state: button::State,
@@ -32,12 +29,7 @@ impl Home {
         ret
     }
 
-    #[allow(dead_code)]
-    pub fn update(&mut self, _msg: &HomeMessage) -> Option<WindowMessage> {
-        None
-    }
-
-    pub fn view(&mut self) -> Element<WindowMessage> {
+    pub fn view(&mut self) -> Element<'_, WindowMessage> {
         let cap = self.server.get_capabilities();
         let contents = Column::new()
             .padding(10)

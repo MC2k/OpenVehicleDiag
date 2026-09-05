@@ -93,7 +93,7 @@ impl DiagHome {
         }
     }
 
-    pub fn view(&mut self) -> Element<DiagHomeMessage> {
+    pub fn view(&mut self) -> Element<'_, DiagHomeMessage> {
         if let Some(ref mut manual) = self.manual_mode {
             manual.view().map(DiagHomeMessage::ManualSession)
         } else if let Some(ref mut scan) = self.scan_mode {

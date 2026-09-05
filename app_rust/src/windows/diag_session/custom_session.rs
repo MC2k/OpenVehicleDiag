@@ -1,11 +1,8 @@
 use iced::Subscription;
 
-use crate::{
-    commapi::comm_api::{ComServer, ISO15765Config},
-    windows::diag_manual::DiagManualMessage,
-};
+use crate::commapi::comm_api::{ComServer, ISO15765Config};
 
-use super::{DiagMessageTrait, SessionError, SessionMsg, SessionResult, SessionTrait};
+use super::{DiagMessageTrait, SessionError, SessionResult, SessionTrait};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CustomDiagSessionMsg {
@@ -19,35 +16,28 @@ impl DiagMessageTrait for CustomDiagSessionMsg {
 }
 
 #[derive(Debug, Clone)]
-pub struct CustomDiagSession {
-    server: Box<dyn ComServer>,
-    ecu: ISO15765Config,
-}
+pub struct CustomDiagSession;
 
 impl CustomDiagSession {
-    pub fn new(comm_server: Box<dyn ComServer>, ecu: ISO15765Config) -> SessionResult<Self> {
+    pub fn new(_comm_server: Box<dyn ComServer>, _ecu: ISO15765Config) -> SessionResult<Self> {
         Err(SessionError::Other(
             "Custom Session is not yet implemented".into(),
         ))
-        //Ok(Self {
-        //    ecu,
-        //    server: comm_server
-        //})
     }
 }
 
 impl SessionTrait for CustomDiagSession {
-    type msg = CustomDiagSessionMsg;
+    type Msg = CustomDiagSessionMsg;
 
-    fn view(&mut self) -> iced::Element<Self::msg> {
+    fn view(&mut self) -> iced::Element<'_, Self::Msg> {
         todo!()
     }
 
-    fn update(&mut self, msg: &Self::msg) -> Option<Self::msg> {
+    fn update(&mut self, _msg: &Self::Msg) -> Option<Self::Msg> {
         todo!()
     }
 
-    fn subscription(&self) -> iced::Subscription<Self::msg> {
+    fn subscription(&self) -> iced::Subscription<Self::Msg> {
         Subscription::none()
     }
 }

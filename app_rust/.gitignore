@@ -1,1 +1,2 @@
 *.json
+!vendor/**/.cargo_vcs_info.json

@@ -7,6 +7,8 @@ use super::KWP2000ECU;
 // service the appropriate session has to be started first. See Table 3.2.1-1 on page 8
 // for a complete list of which service ID’s are supported by each diagnostic session.
 
+// Preserve protocol session modes beyond those currently selected by the UI.
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub enum DiagSession {
     Default = 0x81,

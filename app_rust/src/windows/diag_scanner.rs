@@ -476,7 +476,7 @@ impl DiagScanner {
         }
     }
 
-    pub fn view(&mut self) -> Element<DiagScannerMessage> {
+    pub fn view(&mut self) -> Element<'_, DiagScannerMessage> {
         match self.curr_stage {
             0 => self.draw_stage_0(),
             1 => self.draw_stage_1(),
@@ -490,7 +490,7 @@ impl DiagScanner {
         }
     }
 
-    fn draw_stage_0(&mut self) -> Element<DiagScannerMessage> {
+    fn draw_stage_0(&mut self) -> Element<'_, DiagScannerMessage> {
         let mut c = Column::new().padding(10).spacing(10).align_items(Align::Start).width(Length::Fill)
             .push(title_text("IMPORTANT", crate::themes::TitleSize::P2))
             .push(text("OpenVehicleDiag is going to scan your car for \
@@ -515,7 +515,7 @@ impl DiagScanner {
     }
 
     // Setting up the scanner
-    fn draw_stage_1(&mut self) -> Element<DiagScannerMessage> {
+    fn draw_stage_1(&mut self) -> Element<'_, DiagScannerMessage> {
         Column::new()
             .padding(10)
             .spacing(10)
@@ -537,7 +537,7 @@ impl DiagScanner {
             .into()
     }
 
-    fn draw_stage_2(&mut self) -> Element<DiagScannerMessage> {
+    fn draw_stage_2(&mut self) -> Element<'_, DiagScannerMessage> {
         let mut c = Column::new()
             .padding(10)
             .spacing(10)
@@ -580,7 +580,7 @@ impl DiagScanner {
         c.into()
     }
 
-    fn draw_stage_3(&mut self) -> Element<DiagScannerMessage> {
+    fn draw_stage_3(&mut self) -> Element<'_, DiagScannerMessage> {
         let mut c = Column::new()
             .padding(10)
             .spacing(10)
@@ -612,7 +612,7 @@ impl DiagScanner {
         c.into()
     }
 
-    fn draw_stage_4(&mut self) -> Element<DiagScannerMessage> {
+    fn draw_stage_4(&mut self) -> Element<'_, DiagScannerMessage> {
         Column::new()
             .padding(10)
             .spacing(10)
@@ -630,7 +630,7 @@ impl DiagScanner {
             .into()
     }
 
-    fn draw_stage_5(&mut self) -> Element<DiagScannerMessage> {
+    fn draw_stage_5(&mut self) -> Element<'_, DiagScannerMessage> {
         Column::new()
             .padding(10)
             .spacing(10)
@@ -657,7 +657,7 @@ impl DiagScanner {
             .into()
     }
 
-    fn draw_stage_6(&mut self) -> Element<DiagScannerMessage> {
+    fn draw_stage_6(&mut self) -> Element<'_, DiagScannerMessage> {
         Column::new()
             .padding(10)
             .spacing(10)
@@ -684,7 +684,7 @@ impl DiagScanner {
             .into()
     }
 
-    fn draw_stage_7(&mut self) -> Element<DiagScannerMessage> {
+    fn draw_stage_7(&mut self) -> Element<'_, DiagScannerMessage> {
         let c = Column::new()
             .padding(10)
             .spacing(10)
@@ -743,7 +743,7 @@ impl DiagScanner {
         c.push(row).into()
     }
 
-    fn draw_stage_unk(&mut self) -> Element<DiagScannerMessage> {
+    fn draw_stage_unk(&mut self) -> Element<'_, DiagScannerMessage> {
         Row::new()
             .push(text(
                 format!(

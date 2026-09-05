@@ -64,11 +64,11 @@ pub fn read_dcs_id(ecu: &KWP2000ECU) -> ProtocolResult<DcsEcuId> {
         part_number: bcd_decode_slice(&res[2..=6]),
         // ECU hardware build date. Format WW/YY
         hardware_build_date: format!("{}/{}", bcd_decode(&res[7]), bcd_decode(&res[8])),
-        /// ECU Software written date. Format WW/YY
+        // ECU Software written date. Format WW/YY
         software_written_date: format!("{}/{}", bcd_decode(&res[9]), bcd_decode(&res[10])),
         supplier_id: res[11],
         diag_information: (res[12] as u16) << 8 | res[13] as u16,
-        /// ECU production date. Format DD/MM/YY
+        // ECU production date. Format DD/MM/YY
         production_date: format!(
             "{}/{}/{}",
             bcd_decode(&res[17]),

@@ -65,7 +65,6 @@ impl DiagMessageTrait for JsonDiagSessionMsg {
 #[derive(Debug, Clone)]
 pub struct DisplayableDTC {
     code: String, // DTC Itself
-    summary: String,
     desc: String,
     state: DTCState,
     mil_on: bool,
@@ -82,7 +81,6 @@ pub enum TargetPage {
 
 #[derive(Debug, Clone)]
 pub struct JsonDiagSession {
-    unknown_variant: bool,
     connection_settings: Connection,
     server: DiagServer,
     ecu_text: (String, String),
@@ -97,8 +95,6 @@ pub struct JsonDiagSession {
     btn2: iced::button::State,
     btn3: iced::button::State,
     page_state: TargetPage,
-    scroll_state1: iced::scrollable::State,
-    scroll_state2: iced::scrollable::State,
     tables: Vec<Table>,
 }
 
@@ -157,7 +153,6 @@ impl JsonDiagSession {
             Ok(server) => {
                 println!("Server started");
                 let variant = server.get_variant_id()? as u32;
-                let mut unknown_variant = false;
                 let ecu_varient = ecu_data
                     .variants
                     .clone()
@@ -170,7 +165,6 @@ impl JsonDiagSession {
                     })
                     .unwrap_or_else(|| {
                         eprintln!("WARNING. Unknown ECU Variant!");
-                        unknown_variant = true;
                         ecu_data.variants[0].clone()
                     });
                 let pattern = &ecu_varient
@@ -197,7 +191,6 @@ impl JsonDiagSession {
                 let actuation_functions: Vec<ServiceRef> = Vec::new();
 
                 Ok(Self {
-                    unknown_variant,
                     connection_settings: connection_settings,
                     ecu_text: (ecu_data.name, ecu_data.description),
                     server,
@@ -216,8 +209,6 @@ impl JsonDiagSession {
                     looping_text: String::new(),
                     logged_dtcs: Vec::new(),
                     page_state: TargetPage::Main,
-                    scroll_state1: iced::scrollable::State::default(),
-                    scroll_state2: iced::scrollable::State::default(),
                     tables: vec![Table::default(); MAX_TABLES],
                 })
             }
@@ -230,7 +221,7 @@ impl JsonDiagSession {
 }
 
 impl JsonDiagSession {
-    pub fn draw_main_ui(&mut self) -> iced::Element<JsonDiagSessionMsg> {
+    pub fn draw_main_ui(&mut self) -> iced::Element<'_, JsonDiagSessionMsg> {
         let mut btn_view = Column::new()
             .push(
                 button_outlined(&mut self.btn1, "ECU Information", ButtonType::Primary)
@@ -279,7 +270,7 @@ impl JsonDiagSession {
             ).into()
     }
 
-    pub fn draw_error_ui(&mut self) -> iced::Element<JsonDiagSessionMsg> {
+    pub fn draw_error_ui(&mut self) -> iced::Element<'_, JsonDiagSessionMsg> {
         // Create a table of errors
         // Top row (Clear + back button)
 
@@ -352,7 +343,7 @@ impl JsonDiagSession {
         }
     }
 
-    pub fn draw_info_ui(&mut self) -> iced::Element<JsonDiagSessionMsg> {
+    pub fn draw_info_ui(&mut self) -> iced::Element<'_, JsonDiagSessionMsg> {
         let content = Column::new()
             .padding(8)
             .spacing(8)
@@ -386,8 +377,8 @@ impl JsonDiagSession {
 }
 
 impl SessionTrait for JsonDiagSession {
-    type msg = JsonDiagSessionMsg;
-    fn view(&mut self) -> iced::Element<Self::msg> {
+    type Msg = JsonDiagSessionMsg;
+    fn view(&mut self) -> iced::Element<'_, Self::Msg> {
         match self.page_state {
             TargetPage::Main => self.draw_main_ui(),
             TargetPage::Error => self.draw_error_ui(),
@@ -397,7 +388,7 @@ impl SessionTrait for JsonDiagSession {
         .into()
     }
 
-    fn update(&mut self, msg: &Self::msg) -> Option<Self::msg> {
+    fn update(&mut self, msg: &Self::Msg) -> Option<Self::Msg> {
         //self.log_view.clear_logs();
         match msg {
             JsonDiagSessionMsg::Navigate(target) => self.page_state = *target,
@@ -466,7 +457,6 @@ impl SessionTrait for JsonDiagSession {
                                 });
                             let mut res = DisplayableDTC {
                                 code: ecu_dtc.error_name.clone(),
-                                summary: ecu_dtc.summary.clone(),
                                 desc: ecu_dtc.description.clone(),
                                 state: raw_dtc.state,
                                 mil_on: raw_dtc.check_engine_on,
@@ -602,7 +592,7 @@ impl SessionTrait for JsonDiagSession {
         None
     }
 
-    fn subscription(&self) -> iced::Subscription<Self::msg> {
+    fn subscription(&self) -> iced::Subscription<Self::Msg> {
         if self.looping_service.is_some() {
             return time::every(std::time::Duration::from_millis(500))
                 .map(JsonDiagSessionMsg::LoopRead);
@@ -742,7 +732,7 @@ impl ServiceSelector {
         }
     }
 
-    pub fn view(&mut self) -> iced::Element<SelectorMsg> {
+    pub fn view(&mut self) -> iced::Element<'_, SelectorMsg> {
         let r_btn = match self.view_selection[0] {
             false => button_outlined(&mut self.r_btn, "Read", ButtonType::Info),
             true => button_coloured(&mut self.r_btn, "Read", ButtonType::Info),

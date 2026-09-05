@@ -38,7 +38,6 @@ impl DiagMessageTrait for KWP2000DiagSessionMsg {
 pub struct KWP2000DiagSession {
     ecu: ISO15765Config,
     server: Box<dyn ComServer>,
-    connect_btn: iced::button::State,
     disconnect_btn: iced::button::State,
     back_btn: iced::button::State,
     can_clear_codes: bool,
@@ -57,7 +56,6 @@ impl KWP2000DiagSession {
         Ok(Self {
             ecu,
             server: comm_server,
-            connect_btn: Default::default(),
             disconnect_btn: Default::default(),
             back_btn: Default::default(),
             diag_server: None,
@@ -74,9 +72,9 @@ impl KWP2000DiagSession {
 }
 
 impl SessionTrait for KWP2000DiagSession {
-    type msg = KWP2000DiagSessionMsg;
+    type Msg = KWP2000DiagSessionMsg;
 
-    fn view(&mut self) -> iced::Element<Self::msg> {
+    fn view(&mut self) -> iced::Element<'_, Self::Msg> {
         let mut ui = Column::new().push(title_text("KWP2000 diagnostic session", TitleSize::P3));
 
         let in_session = if let Some(ref s) = self.diag_server {
@@ -161,7 +159,7 @@ impl SessionTrait for KWP2000DiagSession {
             .into()
     }
 
-    fn update(&mut self, msg: &Self::msg) -> Option<Self::msg> {
+    fn update(&mut self, msg: &Self::Msg) -> Option<Self::Msg> {
         match msg {
             KWP2000DiagSessionMsg::ConnectECU => {
                 let mut cfg = InterfaceConfig::new();
@@ -325,7 +323,7 @@ impl SessionTrait for KWP2000DiagSession {
         None
     }
 
-    fn subscription(&self) -> iced::Subscription<Self::msg> {
+    fn subscription(&self) -> iced::Subscription<Self::Msg> {
         if self.diag_server.is_some() {
             time::every(std::time::Duration::from_millis(250))
                 .map(KWP2000DiagSessionMsg::PollServer)

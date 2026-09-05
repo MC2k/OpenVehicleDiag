@@ -6,6 +6,8 @@ use super::{OBDError, ObdServer};
 pub struct Service03;
 
 impl Service03 {
+    // Retain the DTC command API until the OBD UI exposes it.
+    #[allow(dead_code)]
     pub fn read_dtcs(s: &ObdServer) -> OBDError<Vec<DTC>> {
         let mut bytes = s.run_command(0x07, &[])?;
         let num_dtcs = bytes[1];

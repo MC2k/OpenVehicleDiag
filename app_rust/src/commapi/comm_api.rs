@@ -1,7 +1,6 @@
 use std::cmp::min;
 use std::fmt;
 use std::fmt::Debug;
-use std::time::Instant;
 use std::{fmt::Formatter, result::Result};
 
 #[derive(Debug, Copy, Clone, Default)]

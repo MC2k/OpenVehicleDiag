@@ -1,7 +1,4 @@
-use commapi::{
-    comm_api::{ComServer, ISO15765Config},
-    protocols::DTCState,
-};
+use commapi::{comm_api::ComServer, protocols::DTCState};
 use std::sync::atomic::Ordering::Relaxed;
 use std::{
     sync::{
@@ -16,9 +13,7 @@ use self::start_diag_session::DiagSession;
 use crate::commapi::{
     self,
     comm_api::FilterType,
-    iface::{
-        DynamicInterface, Interface, InterfaceConfig, InterfaceType, IsoTPInterface, PayloadFlag,
-    },
+    iface::{DynamicInterface, Interface, InterfaceConfig, InterfaceType, PayloadFlag},
 };
 
 use super::{
@@ -26,8 +21,14 @@ use super::{
     Selectable, DTC,
 };
 
+// Retain selective DTC clearing; the UI currently only clears all errors.
+#[allow(dead_code)]
 pub mod clear_diag_information;
+// Retain ECU reset commands until a dedicated UI exposes them.
+#[allow(dead_code)]
 pub mod ecu_reset;
+// Keep the full identification API and response models, not just fields shown by the UI.
+#[allow(dead_code)]
 pub mod read_ecu_identification;
 pub mod read_status_dtc;
 pub mod start_diag_session;
@@ -35,6 +36,8 @@ pub mod start_diag_session;
 // Developed using Daimler's KWP2000 documentation
 // http://read.pudn.com/downloads554/ebook/2284613/KWP2000_release2_2.pdf
 
+// Keep the protocol's service catalog even when commands have no UI entry point.
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Service {
     StartDiagSession,
@@ -354,10 +357,11 @@ pub struct KWP2000ECU {
     cmd_tx: Sender<(u8, Vec<u8>, bool)>,
     cmd_rx: Arc<Receiver<ProtocolResult<Vec<u8>>>>,
     curr_session_type: Arc<RwLock<DiagSession>>,
-    send_id: u32,
     cmd_mutex: Arc<Mutex<()>>,
 }
 
+// Retain the identification summary model for future protocol consumers.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ECUIdentification {
     part_num: String,
@@ -547,7 +551,6 @@ impl ProtocolServer for KWP2000ECU {
             last_error,
             cmd_tx: channel_tx_sender,
             cmd_rx: Arc::new(channel_rx_receiver),
-            send_id: diag_cfg.send_id,
             curr_session_type: session_type, // Assumed,
             cmd_mutex: Arc::new(Mutex::new(())),
         };

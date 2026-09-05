@@ -1,12 +1,13 @@
 use std::{fs::File, io::Read};
 
-use common::schema::OvdECU;
-use iced::{Align, Column, Element, Length, Row, Subscription};
+use common::schema::{ConType, Connection, OvdECU};
+use iced::{Align, Column, Element, Length, Row, Scrollable, Subscription};
 
 use crate::{
-    commapi::comm_api::{ComServer, ISO15765Config},
+    commapi::comm_api::{Capability, ComServer, ISO15765Config},
     themes::{
-        button_outlined, picklist, text, text_input, title_text, ButtonType, TextType, TitleSize,
+        button_outlined, picklist, radio_btn, text, text_input, title_text, ButtonType, TextType,
+        TitleSize,
     },
 };
 
@@ -19,6 +20,8 @@ use super::{
 pub enum DiagManualMessage {
     LaunchFileBrowser,
     PickECU(ECUDiagSettings),
+    PickConnection(usize),
+    LaunchJSON,
     LaunchKWP,
     LaunchKWPCustom,
     LaunchUDS,
@@ -46,6 +49,9 @@ pub struct DiagManual {
     kwp_btn_state: iced::button::State,
     custom_btn_state: iced::button::State,
     json_btn_state: iced::button::State,
+    json_ecu: Option<OvdECU>,
+    json_connection: Option<usize>,
+    scroll_state: iced::scrollable::State,
     session: Option<DiagSession>,
 
     // Input for custom session!
@@ -77,6 +83,9 @@ impl DiagManual {
             kwp_btn_state: Default::default(),
             custom_btn_state: Default::default(),
             json_btn_state: Default::default(),
+            json_ecu: None,
+            json_connection: None,
+            scroll_state: Default::default(),
             session: None,
             str_send_id: Default::default(),
             str_recv_id: Default::default(),
@@ -123,15 +132,12 @@ impl DiagManual {
                             if let Ok(car) = serde_json::from_str::<VehicleECUList>(&str) {
                                 println!("Car save opened!");
                                 self.curr_ecu = None;
+                                self.json_ecu = None;
+                                self.json_connection = None;
+                                self.status.clear();
                                 self.car = Some(car)
                             } else if let Ok(ecu) = serde_json::from_str::<OvdECU>(&str) {
-                                self.car = None;
-                                if ecu.connections.len() == 1 {
-                                    let con = ecu.connections[0].clone();
-                                    self.launch_diag_session(SessionType::JSON(ecu, con), false)
-                                } else {
-                                    self.status = format!("TODO - Multiple connection dialog!")
-                                }
+                                self.load_json_ecu(ecu);
                             } else {
                                 self.status = format!("Error processing input file!")
                             }
@@ -144,6 +150,14 @@ impl DiagManual {
                 }
             }
             DiagManualMessage::PickECU(e) => self.curr_ecu = Some(e.clone()),
+            DiagManualMessage::PickConnection(index) => {
+                self.json_connection = self
+                    .json_ecu
+                    .as_ref()
+                    .and_then(|ecu| ecu.connections.get(*index).map(|_| *index));
+                self.status.clear();
+            }
+            DiagManualMessage::LaunchJSON => self.launch_json_session(),
             DiagManualMessage::LaunchKWP => self.launch_diag_session(SessionType::KWP, false),
             DiagManualMessage::LaunchUDS => self.launch_diag_session(SessionType::UDS, false),
             DiagManualMessage::LaunchCustom => self.launch_diag_session(SessionType::Custom, false),
@@ -223,6 +237,59 @@ impl DiagManual {
         None
     }
 
+    fn load_json_ecu(&mut self, ecu: OvdECU) {
+        let connection_count = ecu.connections.len();
+        self.car = None;
+        self.curr_ecu = None;
+        self.json_ecu = Some(ecu);
+        self.json_connection = None;
+        self.status.clear();
+        match connection_count {
+            0 => self.status = "ECU JSON file has no connections".into(),
+            1 => {
+                self.json_connection = Some(0);
+                self.launch_json_session();
+            }
+            _ => {}
+        }
+    }
+
+    fn json_connection_error(connection: &Connection, iso_tp: Capability) -> Option<&'static str> {
+        match connection.connection_type {
+            ConType::LIN { .. } => Some("K-Line is not implemented at this time"),
+            ConType::ISOTP { .. } if iso_tp != Capability::Yes => {
+                Some("Selected adapter does not support ISO-TP over CAN")
+            }
+            _ => None,
+        }
+    }
+
+    fn launch_json_session(&mut self) {
+        let selected = self.json_ecu.as_ref().and_then(|ecu| {
+            self.json_connection
+                .and_then(|index| ecu.connections.get(index))
+                .map(|connection| (ecu, connection))
+        });
+        let (ecu, connection) = match selected {
+            Some(selected) => selected,
+            None => {
+                self.status = "Select an ECU JSON connection first".into();
+                return;
+            }
+        };
+        if let Some(error) = Self::json_connection_error(
+            connection,
+            self.server.get_capabilities().supports_iso15765(),
+        ) {
+            self.status = error.into();
+            return;
+        }
+        // Keep the definition and selection available if initialization fails or the user returns.
+        let session_type = SessionType::JSON(ecu.clone(), connection.clone());
+        self.status.clear();
+        self.launch_diag_session(session_type, false);
+    }
+
     fn decode_string_hex(s: &str) -> Option<u32> {
         if s.is_empty() {
             return None;
@@ -300,7 +367,7 @@ impl DiagManual {
         }
     }
 
-    pub fn view(&mut self) -> Element<DiagManualMessage> {
+    pub fn view(&mut self) -> Element<'_, DiagManualMessage> {
         if let Some(ref mut session) = self.session {
             return session.view().map(DiagManualMessage::Session);
         }
@@ -381,6 +448,52 @@ impl DiagManual {
                         .push(custom_btn),
                 );
             }
+        }
+
+        if let Some(ecu) = &self.json_ecu {
+            let iso_tp = self.server.get_capabilities().supports_iso15765();
+            let mut connections = Column::new()
+                .spacing(8)
+                .push(text(&format!("Loaded ECU: {}", ecu.name), TextType::Normal))
+                .push(text("Select a diagnostic connection:", TextType::Normal));
+            for (index, connection) in ecu.connections.iter().enumerate() {
+                let transport = match connection.connection_type {
+                    ConType::ISOTP { .. } => "ISO-TP / CAN",
+                    ConType::LIN { .. } => "K-Line",
+                };
+                let mut label = format!(
+                    "{}. {:?} over {} - {} bit/s - TX 0x{:X}, RX 0x{:X}",
+                    index + 1,
+                    connection.server_type,
+                    transport,
+                    connection.baud,
+                    connection.send_id,
+                    connection.recv_id,
+                );
+                if let Some(error) = Self::json_connection_error(connection, iso_tp) {
+                    label.push_str(&format!(" ({})", error));
+                }
+                connections = connections.push(radio_btn(
+                    index,
+                    label,
+                    self.json_connection,
+                    DiagManualMessage::PickConnection,
+                    ButtonType::Primary,
+                ));
+            }
+            let mut launch = button_outlined(
+                &mut self.json_btn_state,
+                "Launch JSON session",
+                ButtonType::Primary,
+            );
+            if let Some(connection) = self.json_connection.and_then(|i| ecu.connections.get(i)) {
+                if let Some(error) = Self::json_connection_error(connection, iso_tp) {
+                    connections = connections.push(text(error, TextType::Warning));
+                } else {
+                    launch = launch.on_press(DiagManualMessage::LaunchJSON);
+                }
+            }
+            view = view.push(connections.push(launch));
         }
 
         view = view.push(title_text(
@@ -491,6 +604,104 @@ impl DiagManual {
 
         view = view.push(text(&self.status, TextType::Danger));
 
-        view.into()
+        Scrollable::new(&mut self.scroll_state)
+            .height(Length::Fill)
+            .push(view)
+            .into()
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+    use crate::commapi::slcan_api::SlcanApi;
+
+    fn egs52_connection_fixture() -> OvdECU {
+        serde_json::from_str(
+            r#"{
+                "name": "EGS52", "description": "Connection selection fixture", "variants": [],
+                "connections": [
+                    {
+                        "baud": 10400, "send_id": 32, "global_send_id": 32, "recv_id": 32,
+                        "server_type": "KWP2000",
+                        "connection_type": {"LIN": {
+                            "max_segment_size": 254, "wake_up_method": "FiveBaudInit"
+                        }}
+                    },
+                    {
+                        "baud": 500000, "send_id": 2017, "recv_id": 2025,
+                        "server_type": "KWP2000",
+                        "connection_type": {"ISOTP": {
+                            "blocksize": 8, "st_min": 10,
+                            "ext_can_addr": false, "ext_isotp_addr": false
+                        }}
+                    }
+                ]
+            }"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn multiple_json_connections_require_selection_and_allow_can_retry() {
+        let mut manual = DiagManual::new(Box::new(SlcanApi::new(String::new())));
+        manual.load_json_ecu(egs52_connection_fixture());
+        assert!(manual.status.is_empty());
+        assert!(manual.json_connection.is_none());
+        assert!(manual.session.is_none());
+
+        manual.update(&DiagManualMessage::LaunchJSON);
+        assert_eq!(manual.status, "Select an ECU JSON connection first");
+        manual.update(&DiagManualMessage::PickConnection(1));
+        assert!(manual.status.is_empty());
+        let connection = &manual.json_ecu.as_ref().unwrap().connections[1];
+        assert_eq!(connection.baud, 500000);
+        assert_eq!(connection.send_id, 0x7e1);
+        assert_eq!(connection.recv_id, 0x7e9);
+
+        // No COM port is opened: reaching this error proves the ISO-TP launch path was used.
+        manual.update(&DiagManualMessage::LaunchJSON);
+        assert!(manual.status.contains("SLCAN serial port is not open"));
+        assert!(manual.session.is_none());
+        assert_eq!(manual.json_connection, Some(1));
+        assert_eq!(manual.json_ecu.as_ref().unwrap().connections.len(), 2);
+    }
+
+    #[test]
+    fn unsupported_json_connections_are_rejected_before_launch() {
+        let mut manual = DiagManual::new(Box::new(SlcanApi::new(String::new())));
+        manual.load_json_ecu(egs52_connection_fixture());
+        manual.update(&DiagManualMessage::PickConnection(0));
+        manual.update(&DiagManualMessage::LaunchJSON);
+        assert_eq!(manual.status, "K-Line is not implemented at this time");
+        assert!(manual.session.is_none());
+
+        let connection = &manual.json_ecu.as_ref().unwrap().connections[1];
+        assert!(DiagManual::json_connection_error(connection, Capability::Yes).is_none());
+        assert!(DiagManual::json_connection_error(connection, Capability::No).is_some());
+        assert!(DiagManual::json_connection_error(connection, Capability::NA).is_some());
+    }
+
+    #[test]
+    fn loading_json_resets_selection_and_preserves_single_connection_launch() {
+        let mut manual = DiagManual::new(Box::new(SlcanApi::new(String::new())));
+        let mut ecu = egs52_connection_fixture();
+        ecu.connections.remove(0);
+        manual.load_json_ecu(ecu.clone());
+        assert_eq!(manual.json_connection, Some(0));
+        assert!(manual.status.contains("SLCAN serial port is not open"));
+
+        manual.load_json_ecu(egs52_connection_fixture());
+        assert!(manual.json_connection.is_none());
+        assert!(manual.status.is_empty());
+        manual.update(&DiagManualMessage::PickConnection(1));
+        manual.update(&DiagManualMessage::PickConnection(99));
+        assert!(manual.json_connection.is_none());
+
+        ecu.connections.clear();
+        manual.load_json_ecu(ecu);
+        assert!(manual.json_connection.is_none());
+        assert_eq!(manual.status, "ECU JSON file has no connections");
+        assert!(manual.session.is_none());
     }
 }

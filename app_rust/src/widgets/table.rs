@@ -89,7 +89,7 @@ impl Table {
         }
     }
 
-    pub fn view(&mut self) -> Element<TableMsg> {
+    pub fn view(&mut self) -> Element<'_, TableMsg> {
         if self.header_row.is_empty() || self.text_matrix.is_empty() {
             return text(&self.default_text, TextType::Normal).into();
         }

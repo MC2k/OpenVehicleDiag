@@ -102,7 +102,7 @@ impl DiagSession {
         })
     }
 
-    pub fn view(&mut self) -> Element<SessionMsg> {
+    pub fn view(&mut self) -> Element<'_, SessionMsg> {
         match self {
             DiagSession::UDS(s) => s.view().map(SessionMsg::UDS),
             DiagSession::KWP(s) => s.view().map(SessionMsg::KWP),
@@ -159,11 +159,11 @@ pub trait DiagMessageTrait: std::fmt::Debug {
 }
 
 pub trait SessionTrait: std::fmt::Debug {
-    type msg: DiagMessageTrait;
+    type Msg: DiagMessageTrait;
 
-    fn view(&mut self) -> Element<Self::msg>;
+    fn view(&mut self) -> Element<'_, Self::Msg>;
 
-    fn update(&mut self, msg: &Self::msg) -> Option<Self::msg>;
+    fn update(&mut self, msg: &Self::Msg) -> Option<Self::Msg>;
 
-    fn subscription(&self) -> Subscription<Self::msg>;
+    fn subscription(&self) -> Subscription<Self::Msg>;
 }

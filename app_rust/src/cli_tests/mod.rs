@@ -5,13 +5,16 @@ pub mod draw_routine {
     use image::{GenericImageView, ImageFormat};
 
     use crate::{
-        commapi::{comm_api::ComServer, passthru_api::PassthruApi, protocols::kwp2000::KWP2000ECU},
-        commapi::{comm_api::ISO15765Config, protocols::ProtocolServer},
+        commapi::{
+            comm_api::ComServer,
+            iface::{InterfaceConfig, InterfaceType, IFACE_CFG},
+            passthru_api::PassthruApi,
+            protocols::{kwp2000::KWP2000ECU, DiagCfg, ProtocolServer},
+        },
         passthru::{PassthruDevice, PassthruDrv},
-        themes::images::{TRAY_ICON, TRAY_ICON_DARK},
     };
 
-    pub const test_img: &[u8] = include_bytes!("../../img/cat.png");
+    pub const TEST_IMG: &[u8] = include_bytes!("../../img/cat.png");
 
     struct Line {
         start_x: u8,
@@ -21,6 +24,7 @@ pub mod draw_routine {
     }
 
     #[test]
+    #[ignore = "requires a connected J2534 adapter and runs indefinitely"]
     fn test_cmd() {
         const LCD_WIDTH: u32 = 60;
         const LCD_HEIGHT: u32 = 100;
@@ -35,23 +39,25 @@ pub mod draw_routine {
         api.open_device().expect("Could not open device!");
 
         // Start ISO-TP KWP2000 session with IC
+        let mut config = InterfaceConfig::new();
+        config.add_param(IFACE_CFG::BAUDRATE, 500_000);
+        config.add_param(IFACE_CFG::ISOTP_BS, 8);
+        config.add_param(IFACE_CFG::ISOTP_ST_MIN, 20);
         let server = KWP2000ECU::start_diag_session(
-            api,
-            &ISO15765Config {
-                baud: 500_000,
+            &api,
+            InterfaceType::IsoTp,
+            config,
+            None,
+            DiagCfg {
                 send_id: 1460,
                 recv_id: 1268,
-                block_size: 8,
-                sep_time: 20,
-                use_ext_isotp: false,
-                use_ext_can: false,
+                global_id: None,
             },
-            None,
         )
         .expect("Error opening connection with IC ECU");
 
         // W203 IC is 56 pixels wide, ~100 tall for the top zone
-        let img = image::load_from_memory_with_format(test_img, ImageFormat::Png)
+        let img = image::load_from_memory_with_format(TEST_IMG, ImageFormat::Png)
             .expect("Error loading image");
 
         // get scale bounds for the image
@@ -96,13 +102,14 @@ pub mod draw_routine {
             }
         }
 
+        // Keep the manual drawing loop running even if an ECU command fails.
         for l in lines {
             // Send draw line command to LCD
-            server.run_command(0x31, &[0x03, 0x06, l.start_x, l.start_y, l.end_x, l.end_y]);
+            let _ = server.run_command(0x31, &[0x03, 0x06, l.start_x, l.start_y, l.end_x, l.end_y]);
         }
 
         loop {
-            server.run_command(0x31, &[03, 06, 00, 00, 00, 00]); // Keep the test active (Stops LCD from clearing after test)
+            let _ = server.run_command(0x31, &[03, 06, 00, 00, 00, 00]); // Keep the test active (Stops LCD from clearing after test)
         }
     }
 }

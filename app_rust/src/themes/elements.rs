@@ -406,7 +406,7 @@ impl iced::text_input::StyleSheet for TextInput {
 
 pub struct CheckBox;
 impl iced::checkbox::StyleSheet for CheckBox {
-    fn active(&self, is_checked: bool) -> iced::checkbox::Style {
+    fn active(&self, _is_checked: bool) -> iced::checkbox::Style {
         match super::get_theme() {
             super::Style::Light => iced::checkbox::Style {
                 background: super::WHITE.into(),
@@ -425,7 +425,7 @@ impl iced::checkbox::StyleSheet for CheckBox {
         }
     }
 
-    fn hovered(&self, is_checked: bool) -> iced::checkbox::Style {
+    fn hovered(&self, _is_checked: bool) -> iced::checkbox::Style {
         match super::get_theme() {
             super::Style::Light => iced::checkbox::Style {
                 background: super::WHITE.into(),

@@ -7,6 +7,7 @@ use iced::{
 };
 use std::borrow::Cow;
 use std::ops::RangeInclusive;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use self::elements::{ButtonTableStyle, CheckBox, TextInput};
 
@@ -33,16 +34,16 @@ const WHITE: Color = Color {
     a: 1.0,
 };
 
-static mut CURR_THEME: Style = Style::Dark;
+static DARK_THEME: AtomicBool = AtomicBool::new(true);
 
-static mut DEBUG: bool = false;
+static DEBUG: AtomicBool = AtomicBool::new(false);
 
 pub fn set_debug(state: bool) {
-    unsafe { DEBUG = state }
+    DEBUG.store(state, Ordering::Relaxed);
 }
 
 pub fn is_debug() -> bool {
-    unsafe { DEBUG }
+    DEBUG.load(Ordering::Relaxed)
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -52,23 +53,27 @@ pub enum Style {
 }
 
 pub fn set_dark_theme() {
-    unsafe { CURR_THEME = Style::Dark }
+    DARK_THEME.store(true, Ordering::Relaxed);
 }
 
 pub fn set_light_theme() {
-    unsafe { CURR_THEME = Style::Light }
+    DARK_THEME.store(false, Ordering::Relaxed);
 }
 
 pub fn toggle_theme() {
-    if *get_theme() == Style::Light {
+    if get_theme() == Style::Light {
         set_dark_theme()
     } else {
         set_light_theme()
     }
 }
 
-pub(crate) fn get_theme<'a>() -> &'a Style {
-    unsafe { &CURR_THEME }
+pub(crate) fn get_theme() -> Style {
+    if DARK_THEME.load(Ordering::Relaxed) {
+        Style::Dark
+    } else {
+        Style::Light
+    }
 }
 
 #[allow(dead_code)]
@@ -101,7 +106,7 @@ impl TextType {
             TextType::Danger => ButtonType::Danger.get_colour(),
             TextType::Disabled => GREY,
             TextType::Normal => {
-                if *get_theme() == Style::Light {
+                if get_theme() == Style::Light {
                     DARK_BG
                 } else {
                     WHITE
@@ -241,4 +246,32 @@ where
     iced::text_input::TextInput::new(state, placeholder, value, on_change)
         .style(TextInput)
         .padding(8)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn theme_and_debug_settings_can_be_changed() {
+        let original_theme = get_theme();
+        let original_debug = is_debug();
+        set_light_theme();
+        assert_eq!(get_theme(), Style::Light);
+        toggle_theme();
+        assert_eq!(get_theme(), Style::Dark);
+        toggle_theme();
+        assert_eq!(get_theme(), Style::Light);
+        set_dark_theme();
+        assert_eq!(get_theme(), Style::Dark);
+        set_debug(true);
+        assert!(is_debug());
+        set_debug(false);
+        assert!(!is_debug());
+        match original_theme {
+            Style::Light => set_light_theme(),
+            Style::Dark => set_dark_theme(),
+        }
+        set_debug(original_debug);
+    }
 }

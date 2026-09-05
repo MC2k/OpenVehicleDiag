@@ -1,13 +1,13 @@
 use crate::commapi::comm_api::{
     CanFrame, Capability, ComServer, ComServerError, DeviceCapabilities, FilterType, ISO15765Data,
 };
-use crate::passthru::{self, DrvVersion, PassthruDevice, PassthruDrv};
+use crate::passthru::{DrvVersion, PassthruDevice, PassthruDrv};
 use j2534_rust::FilterType::{BLOCK_FILTER, FLOW_CONTROL_FILTER, PASS_FILTER};
 use j2534_rust::IoctlID::READ_VBATT;
 use j2534_rust::PassthruError::{ERR_FAILED, ERR_INVALID_CHANNEL_ID};
 use j2534_rust::{
-    ConnectFlags, IoctlID, IoctlParam, Loggable, PassthruError, Protocol, SConfig, SConfigList,
-    TxFlag, PASSTHRU_MSG,
+    ConnectFlags, IoctlID, IoctlParam, PassthruError, Protocol, SConfig, SConfigList, TxFlag,
+    PASSTHRU_MSG,
 };
 use std::sync::{Arc, Mutex, RwLock};
 use std::{os::raw::c_void, time::Instant};
@@ -160,7 +160,7 @@ impl ComServer for PassthruApi {
         }
         let mut flags: u32 = 0;
         if is_ext_can {
-            flags |= ConnectFlags::CAN_29BIT_ID as u32;
+            flags |= ConnectFlags::CAN_29BIT_ID.bits();
         }
         let channel_id = self
             .driver
@@ -205,10 +205,10 @@ impl ComServer for PassthruApi {
         }
         let mut flags: u32 = 0;
         if is_ext_can {
-            flags |= ConnectFlags::CAN_29BIT_ID as u32;
+            flags |= ConnectFlags::CAN_29BIT_ID.bits();
         }
         if ext_addressing {
-            flags |= ConnectFlags::ISO15765_ADDR_TYPE as u32;
+            flags |= ConnectFlags::ISO15765_ADDR_TYPE.bits();
         }
         let channel_id = self
             .driver
@@ -245,19 +245,9 @@ impl ComServer for PassthruApi {
         match *self.can_channel_idx.read().unwrap() {
             None => Err(self.convert_error(ERR_INVALID_CHANNEL_ID)),
             Some(idx) => {
-                let mut apply_mask = 0;
-                let mut apply_id = 0;
-                let f_type = match f {
-                    FilterType::Pass { id, mask } => {
-                        apply_mask = mask;
-                        apply_id = id;
-                        PASS_FILTER
-                    }
-                    FilterType::Block { id, mask } => {
-                        apply_mask = mask;
-                        apply_id = id;
-                        BLOCK_FILTER
-                    }
+                let (f_type, apply_mask, apply_id) = match f {
+                    FilterType::Pass { id, mask } => (PASS_FILTER, mask, id),
+                    FilterType::Block { id, mask } => (BLOCK_FILTER, mask, id),
                     _ => {
                         return Err(ComServerError {
                             err_code: 99,

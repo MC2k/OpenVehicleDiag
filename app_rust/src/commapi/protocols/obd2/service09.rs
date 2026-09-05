@@ -57,6 +57,8 @@ impl Service09 {
         }
     }
 
+    // Retain the VIN message-count query as part of the vehicle-information API.
+    #[allow(dead_code)]
     pub fn get_vin_msg_count(&self, s: &ObdServer) -> OBDError<u8> {
         self.check_service_supported(0x01)?;
         s.run_command(0x09, &[0x01]).map(|s| s[2])

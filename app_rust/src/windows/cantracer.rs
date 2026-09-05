@@ -10,11 +10,10 @@ use crate::{
 use iced::{button, Color, Column, Element, Length, Row, Scrollable, Subscription, Text};
 use iced::{pick_list, time};
 use std::collections::HashMap;
-use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub enum TracerMessage {
-    NewData(Instant),
+    NewData,
     ToggleCan,
     ToggleExt(bool),
     SelectBaud(CanSpeed),
@@ -153,31 +152,22 @@ impl<'a> CanTracer {
             self.status_text = format!("Error opening CAN Interface {}", e)
         } else {
             self.is_connected = true;
+            self.status_text.clear();
             if let Err(e) = self.can_interface.add_filter(FilterType::Pass {
                 id: 0x0000,
                 mask: 0x0000,
             }) {
                 self.status_text = format!("Error setting CAN Filter {}", e)
-            } else if let Err(e) = self.can_interface.send_data(
-                &[InterfacePayload {
-                    id: 0x07DF,
-                    data: vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-                    flags: vec![],
-                }],
-                0,
-            ) {
-                self.status_text = format!("Error sending wake-up packet {}", e)
             }
         }
     }
 
     pub fn update(&mut self, msg: &TracerMessage) -> Option<WindowMessage> {
         match msg {
-            TracerMessage::NewData(_) => {
-                if let Ok(m) = self.can_interface.recv_data(100, 0) {
-                    self.insert_frames_to_map(m)
-                }
-            }
+            TracerMessage::NewData => match self.can_interface.recv_data(100, 0) {
+                Ok(m) => self.insert_frames_to_map(m),
+                Err(e) => self.status_text = format!("Error reading CAN data {e}"),
+            },
             TracerMessage::ToggleCan => {
                 if self.is_connected {
                     self.close_can();
@@ -201,12 +191,12 @@ impl<'a> CanTracer {
 
     pub fn subscription(&self) -> Subscription<TracerMessage> {
         if self.is_connected {
-            return time::every(std::time::Duration::from_millis(10)).map(TracerMessage::NewData);
+            return time::every(std::time::Duration::from_millis(10)).map(|_| TracerMessage::NewData);
         }
         Subscription::none()
     }
 
-    pub fn view(&mut self) -> Element<TracerMessage> {
+    pub fn view(&mut self) -> Element<'_, TracerMessage> {
         let btn = match self.is_connected {
             false => button_coloured(&mut self.btn_state, "Connect", ButtonType::Info),
             true => button_coloured(&mut self.btn_state, "Disconnect", ButtonType::Info),
@@ -247,6 +237,7 @@ impl<'a> CanTracer {
                 "View CAN in Binary",
                 TracerMessage::ToggleBinaryMode,
             ))
+            .push(Text::new(&self.status_text))
             .push(
                 Scrollable::new(&mut self.scroll_state)
                     .height(Length::Fill)
@@ -280,7 +271,7 @@ impl<'a> CanTracer {
                 let old_data = &old_frame.data;
                 for (i, byte) in i.data.iter().enumerate() {
                     container =
-                        if *byte == old_data[i] {
+                        if old_data.get(i).map_or(false, |old_byte| *byte == *old_byte) {
                             // Same as old data
                             match binary {
                                 true => container

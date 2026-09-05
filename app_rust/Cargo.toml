@@ -39,6 +39,7 @@ backtrace = "0.3.59"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.8"
+serialport = "4.8.1"
 
 [target.'cfg(unix)'.dependencies]
 shellexpand = "2.0.0"
@@ -46,3 +47,8 @@ shellexpand = "2.0.0"
 [target.'cfg(target_os = "linux")'.dependencies]
 socketcan = "1.7.0"
 socketcan-isotp = "0.1.1"
+
+# Same-version compatibility fixes; see vendor/README.md.
+[patch.crates-io]
+nfd = { path = "vendor/nfd-0.0.4" }
+wgpu-core = { path = "vendor/wgpu-core-0.7.2" }

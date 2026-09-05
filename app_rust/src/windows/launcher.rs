@@ -1,3 +1,4 @@
+#[cfg(target_os = "linux")]
 use std::process::Command;
 
 use crate::commapi::passthru_api::PassthruApi;
@@ -12,6 +13,9 @@ use crate::{
 };
 use iced::{button, pick_list, Align, Column, Element, Length, Row, Text};
 
+#[cfg(target_os = "windows")]
+use crate::commapi::slcan_api::SlcanApi;
+
 #[cfg(target_os = "linux")]
 use crate::commapi::socket_can_api::SocketCanAPI;
 
@@ -23,8 +27,10 @@ pub struct Launcher {
 
     selection: pick_list::State<String>,
 
-    device_names_dpdu: Vec<String>,
-    selected_device_dpdu: String,
+    #[cfg(target_os = "windows")]
+    device_names_slcan: Vec<String>,
+    #[cfg(target_os = "windows")]
+    selected_device_slcan: String,
 
     #[cfg(target_os = "linux")]
     device_names_socketcan: Vec<String>,
@@ -42,6 +48,7 @@ pub struct Launcher {
 pub enum API {
     DPdu,
     Passthru,
+    SLCAN,
     SocketCAN,
 }
 
@@ -75,8 +82,13 @@ impl Launcher {
             device_names_passthru: passthru_device_names,
             selected_device_passthru: selected_passthru_device,
 
-            device_names_dpdu: vec![],
-            selected_device_dpdu: "".to_string(),
+            #[cfg(target_os = "windows")]
+            device_names_slcan: Self::find_devices_slcan(),
+            #[cfg(target_os = "windows")]
+            selected_device_slcan: serialport::available_ports()
+                .ok()
+                .and_then(|ports| ports.into_iter().map(|port| port.port_name).next())
+                .unwrap_or_default(),
 
             #[cfg(target_os = "linux")]
             device_names_socketcan: Self::find_devices_socketcan(),
@@ -93,18 +105,22 @@ impl Launcher {
     pub fn update(&mut self, msg: &LauncherMessage) -> Option<WindowMessage> {
         match msg {
             LauncherMessage::SwitchAPI(api) => self.api_selection = *api,
-            LauncherMessage::DeviceSelected(d) => {
-                if self.api_selection == API::Passthru {
-                    self.selected_device_passthru = d.clone()
-                } else if self.api_selection == API::DPdu {
-                    self.selected_device_dpdu = d.clone()
-                } else {
-                    #[cfg(target_os = "linux")]
+            LauncherMessage::DeviceSelected(d) => match self.api_selection {
+                API::Passthru => self.selected_device_passthru = d.clone(),
+                API::DPdu => {}
+                API::SLCAN => {
+                    #[cfg(target_os = "windows")]
                     {
-                        self.selected_device_socketcan = d.clone()
+                        self.selected_device_slcan = d.clone();
                     }
                 }
-            }
+                API::SocketCAN => {
+                    #[cfg(target_os = "linux")]
+                    {
+                        self.selected_device_socketcan = d.clone();
+                    }
+                }
+            },
             LauncherMessage::LaunchRequested => {
                 if self.api_selection == API::Passthru {
                     match self.get_device_passthru() {
@@ -121,6 +137,16 @@ impl Launcher {
                     }
                 } else if self.api_selection == API::DPdu {
                     // TODO D-PDU Launching
+                } else if self.api_selection == API::SLCAN {
+                    #[cfg(target_os = "windows")]
+                    {
+                        let mut server = SlcanApi::new(self.selected_device_slcan.clone());
+                        if let Err(e) = server.open_device() {
+                            self.status_text = e.to_string()
+                        } else {
+                            return Some(WindowMessage::StartApp(server.clone_box()));
+                        }
+                    }
                 } else if self.api_selection == API::SocketCAN {
                     #[cfg(target_os = "linux")]
                     {
@@ -138,7 +164,7 @@ impl Launcher {
         None
     }
 
-    pub fn view(&mut self) -> Element<LauncherMessage> {
+    pub fn view(&mut self) -> Element<'_, LauncherMessage> {
         let mut selection = Row::new()
             .push(Text::new("API:"))
             .push(radio_btn(
@@ -158,6 +184,17 @@ impl Launcher {
             .padding(20)
             .spacing(10)
             .align_items(Align::Center);
+
+        #[cfg(target_os = "windows")]
+        {
+            selection = selection.push(radio_btn(
+                API::SLCAN,
+                "SLCAN",
+                Some(self.api_selection),
+                LauncherMessage::SwitchAPI,
+                ButtonType::Primary,
+            ));
+        }
 
         #[cfg(target_os = "linux")] // Only available on Linux
         {
@@ -182,8 +219,8 @@ impl Launcher {
                     "D-PDU API is unimplemented, check back in a future release!",
                 ))
                 .spacing(10)
-        } else if self.api_selection == API::SocketCAN {
-            let mut c = Column::new()
+        } else if self.api_selection == API::SLCAN {
+            let c = Column::new()
                 .push(
                     get_launcher_image()
                         .width(Length::Units(300))
@@ -191,6 +228,47 @@ impl Launcher {
                 )
                 .push(selection)
                 .spacing(10);
+            #[cfg(target_os = "windows")]
+            let mut c = c;
+            #[cfg(target_os = "windows")]
+            {
+                if self.device_names_slcan.is_empty() {
+                    c = c.push(text(
+                        "No serial ports found for an SLCAN adapter",
+                        TextType::Normal,
+                    ))
+                } else {
+                    c = c
+                        .push(Text::new("Select SLCAN serial port"))
+                        .push(picklist(
+                            &mut self.selection,
+                            &self.device_names_slcan,
+                            Some(self.selected_device_slcan.clone()),
+                            LauncherMessage::DeviceSelected,
+                        ))
+                        .push(
+                            button_coloured(
+                                &mut self.launch_state,
+                                "Launch OVD",
+                                ButtonType::Primary,
+                            )
+                            .on_press(LaunchRequested),
+                        )
+                        .push(Text::new(&self.status_text));
+                }
+            }
+            c
+        } else if self.api_selection == API::SocketCAN {
+            let c = Column::new()
+                .push(
+                    get_launcher_image()
+                        .width(Length::Units(300))
+                        .height(Length::Units(300)),
+                )
+                .push(selection)
+                .spacing(10);
+            #[cfg(target_os = "linux")]
+            let mut c = c;
             #[cfg(target_os = "linux")]
             {
                 if self.device_names_socketcan.is_empty() {
@@ -283,6 +361,7 @@ impl Launcher {
         }
     }
 
+    #[cfg(target_os = "linux")]
     fn find_devices_socketcan() -> Vec<String> {
         let cmd = Command::new("ip")
             .arg("-o")
@@ -305,5 +384,16 @@ impl Launcher {
             })
             .filter(|s| s.contains("can"))
             .collect()
+    }
+
+    #[cfg(target_os = "windows")]
+    fn find_devices_slcan() -> Vec<String> {
+        let mut ports: Vec<String> = serialport::available_ports()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|port| port.port_name)
+            .collect();
+        ports.sort();
+        ports
     }
 }

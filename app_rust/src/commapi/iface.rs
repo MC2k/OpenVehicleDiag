@@ -124,6 +124,8 @@ pub trait Interface: Send + Sync + Debug {
             return Ok(res[0].clone());
         }
     }
+    // Retain adapter access for interface consumers beyond the current UI.
+    #[allow(dead_code)]
     fn get_server(&self) -> Box<dyn ComServer>;
     fn clone_box(&self) -> Box<dyn Interface>;
 }

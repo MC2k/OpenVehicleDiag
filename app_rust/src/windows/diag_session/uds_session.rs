@@ -1,10 +1,4 @@
-use std::{
-    borrow::BorrowMut,
-    cell::RefCell,
-    sync::{atomic::AtomicBool, Arc},
-    thread::JoinHandle,
-    time::Instant,
-};
+use std::{borrow::BorrowMut, time::Instant};
 
 use iced::{time, Column, Container, Length, Row, Space, Subscription};
 use log_view::{LogType, LogView};
@@ -45,7 +39,6 @@ impl DiagMessageTrait for UDSDiagSessionMsg {
 pub struct UDSDiagSession {
     ecu: ISO15765Config,
     server: Box<dyn ComServer>,
-    connect_btn: iced::button::State,
     disconnect_btn: iced::button::State,
     back_btn: iced::button::State,
     can_clear_codes: bool,
@@ -64,7 +57,6 @@ impl UDSDiagSession {
         Ok(Self {
             ecu,
             server: comm_server,
-            connect_btn: Default::default(),
             disconnect_btn: Default::default(),
             back_btn: Default::default(),
             diag_server: None,
@@ -81,9 +73,9 @@ impl UDSDiagSession {
 }
 
 impl SessionTrait for UDSDiagSession {
-    type msg = UDSDiagSessionMsg;
+    type Msg = UDSDiagSessionMsg;
 
-    fn view(&mut self) -> iced::Element<Self::msg> {
+    fn view(&mut self) -> iced::Element<'_, Self::Msg> {
         let mut ui = Column::new().push(title_text("KWP2000 diagnostic session", TitleSize::P3));
 
         let in_session = if let Some(ref s) = self.diag_server {
@@ -168,7 +160,7 @@ impl SessionTrait for UDSDiagSession {
             .into()
     }
 
-    fn update(&mut self, msg: &Self::msg) -> Option<Self::msg> {
+    fn update(&mut self, msg: &Self::Msg) -> Option<Self::Msg> {
         match msg {
             UDSDiagSessionMsg::ConnectECU => {
                 let mut cfg = InterfaceConfig::new();
@@ -300,7 +292,7 @@ impl SessionTrait for UDSDiagSession {
         None
     }
 
-    fn subscription(&self) -> iced::Subscription<Self::msg> {
+    fn subscription(&self) -> iced::Subscription<Self::Msg> {
         if self.diag_server.is_some() {
             time::every(std::time::Duration::from_millis(250)).map(UDSDiagSessionMsg::PollServer)
         } else {

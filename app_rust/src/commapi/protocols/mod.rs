@@ -14,6 +14,8 @@ use super::{
 pub mod kwp2000;
 pub mod obd2;
 pub mod uds;
+// Retain VIN decoding for richer vehicle identification views.
+#[allow(dead_code)]
 pub mod vin;
 
 #[derive(Debug)]
@@ -31,7 +33,7 @@ impl ProtocolError {
             ProtocolError::CommError(_) => false,
             ProtocolError::ProtocolError(_) => false,
             ProtocolError::CustomError(_) => false,
-            ProtocolError::InvalidResponseSize { expect, actual } => false,
+            ProtocolError::InvalidResponseSize { .. } => false,
             ProtocolError::Timeout => true,
         }
     }
@@ -63,10 +65,14 @@ impl ProtocolError {
 pub type ProtocolResult<T> = std::result::Result<T, ProtocolError>;
 
 pub trait Selectable: Into<u8> {
+    // Command descriptions are retained for a future command-selection UI.
+    #[allow(dead_code)]
     fn get_desc(&self) -> String;
     fn get_name(&self) -> String;
 }
 
+// Retain safety metadata for commands not yet exposed in the UI.
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CautionLevel {
     // This has no adverse effects on the ECU
@@ -77,6 +83,8 @@ pub enum CautionLevel {
     Alert = 2,
 }
 
+// Command catalogs and safety levels support future command-selection views.
+#[allow(dead_code)]
 pub trait ECUCommand: Selectable {
     fn get_caution_level(&self) -> CautionLevel;
     fn get_cmd_list() -> Vec<Self>;
@@ -168,6 +176,8 @@ impl DiagServer {
         })
     }
 
+    // Retain a protocol label for consumers of the unified diagnostic server.
+    #[allow(dead_code)]
     pub fn get_name<'a>(&self) -> &'a str {
         match self {
             Self::KWP2000(_) => "KWP2000",
@@ -192,7 +202,7 @@ impl DiagServer {
     pub fn into_kwp(&mut self) -> Option<&mut KWP2000ECU> {
         match self {
             Self::KWP2000(s) => Some(s),
-            Self::UDS(s) => None,
+            Self::UDS(_) => None,
         }
     }
 

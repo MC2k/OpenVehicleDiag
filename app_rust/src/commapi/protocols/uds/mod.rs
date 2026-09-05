@@ -18,6 +18,8 @@ pub mod diag_session_control;
 pub mod read_data;
 pub mod read_dtc_info;
 
+// Keep the protocol's service catalog even when commands have no UI entry point.
+#[allow(dead_code)]
 #[derive(Copy, Clone, Debug, Eq, PartialOrd, PartialEq)]
 /// UDS Commands AKA SID (Service identifiers)
 pub enum UDSCommand {
@@ -222,6 +224,8 @@ pub enum UDSNegativeCode {
     TorqueConverterClutchLocked,
     VoltageTooHigh,
     VoltageTooLow,
+    // Retain this named condition without changing the existing byte-decoding policy.
+    #[allow(dead_code)]
     ReservedSpecificConditionsIncorrect,
     NoResponseSubnetComponent,
     FailurePreventsExecutionOfRequestedAction,
@@ -401,7 +405,6 @@ pub struct UDSECU {
     cmd_tx: Sender<(u8, Vec<u8>, bool)>,
     cmd_rx: Arc<Receiver<ProtocolResult<Vec<u8>>>>,
     curr_session_type: Arc<RwLock<DiagSession>>,
-    send_id: u32,
     cmd_mutex: Arc<Mutex<()>>,
 }
 
@@ -524,7 +527,6 @@ impl ProtocolServer for UDSECU {
             last_error,
             cmd_tx: channel_tx_sender,
             cmd_rx: Arc::new(channel_rx_receiver),
-            send_id: diag_cfg.send_id,
             curr_session_type: session_type, // Assumed,
             cmd_mutex: Arc::new(Mutex::new(())),
         };

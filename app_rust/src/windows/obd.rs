@@ -102,7 +102,7 @@ impl OBDHome {
         None
     }
 
-    pub fn view(&mut self) -> Element<OBDMessage> {
+    pub fn view(&mut self) -> Element<'_, OBDMessage> {
         if self.in_session {
             match self.curr_service {
                 0x09 => self.create_s09_ui(),
@@ -113,7 +113,7 @@ impl OBDHome {
         }
     }
 
-    pub fn create_main_ui(&mut self) -> Element<OBDMessage> {
+    pub fn create_main_ui(&mut self) -> Element<'_, OBDMessage> {
         let mut row = Column::new()
             .padding(10)
             .spacing(10)
@@ -143,7 +143,7 @@ impl OBDHome {
             .into()
     }
 
-    pub fn create_connect_ui(&mut self) -> Element<OBDMessage> {
+    pub fn create_connect_ui(&mut self) -> Element<'_, OBDMessage> {
         let obd_btn = button_outlined(
             &mut self.kline_state,
             "K-Line not implemented",
@@ -197,7 +197,7 @@ impl OBDHome {
             .into()
     }
 
-    pub fn create_s09_ui(&mut self) -> Element<OBDMessage> {
+    pub fn create_s09_ui(&mut self) -> Element<'_, OBDMessage> {
         Column::new()
             .push(title_text("Vehicle information", TitleSize::P3))
             .push(text(
@@ -220,7 +220,7 @@ impl OBDHome {
             .into()
     }
 
-    pub fn add_back_button(&mut self) -> Element<OBDMessage> {
+    pub fn add_back_button(&mut self) -> Element<'_, OBDMessage> {
         button_coloured(
             &mut self.service_btn_states[0],
             "Go back",

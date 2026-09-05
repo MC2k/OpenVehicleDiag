@@ -6,6 +6,8 @@ use super::{OBDError, ObdServer};
 pub struct Service04;
 
 impl Service04 {
+    // Retain DTC clearing until the OBD UI exposes it.
+    #[allow(dead_code)]
     pub fn clear_dtcs(s: &ObdServer) -> OBDError<()> {
         s.run_command(0x04, &[]).map(|_| ())
     }

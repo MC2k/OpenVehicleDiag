@@ -81,6 +81,8 @@ impl CommandError for ObdError {
     }
 }
 
+// Keep the service catalog for command selection beyond the current OBD views.
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
 pub enum OBDCmd {
     Service01,
