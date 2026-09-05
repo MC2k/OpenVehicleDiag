@@ -199,6 +199,29 @@ impl DiagServer {
         }
     }
 
+    pub fn set_kwp_session(&mut self, mode: u8) -> ProtocolResult<()> {
+        let mode = match mode {
+            0x81 => kwp2000::start_diag_session::DiagSession::Default,
+            0x85 => kwp2000::start_diag_session::DiagSession::Flash,
+            0x89 => kwp2000::start_diag_session::DiagSession::Standby,
+            0x90 => kwp2000::start_diag_session::DiagSession::Passive,
+            0x92 => kwp2000::start_diag_session::DiagSession::Extended,
+            _ => {
+                return Err(ProtocolError::CustomError(format!(
+                    "Unsupported KWP2000 diagnostic session: 0x{:02X}",
+                    mode
+                )))
+            }
+        };
+
+        match self {
+            Self::KWP2000(s) => s.set_diag_session_mode(mode),
+            Self::UDS(_) => Err(ProtocolError::CustomError(
+                "KWP2000 diagnostic sessions are unavailable for UDS".into(),
+            )),
+        }
+    }
+
     pub fn into_kwp(&mut self) -> Option<&mut KWP2000ECU> {
         match self {
             Self::KWP2000(s) => Some(s),

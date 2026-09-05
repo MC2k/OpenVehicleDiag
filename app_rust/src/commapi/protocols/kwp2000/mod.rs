@@ -401,7 +401,7 @@ impl KWP2000ECU {
         Ok(())
     }
 
-    fn set_diag_session_mode(
+    pub fn set_diag_session_mode(
         &mut self,
         mode: DiagSession,
     ) -> std::result::Result<(), ProtocolError> {

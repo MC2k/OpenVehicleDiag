@@ -5,7 +5,7 @@ use crate::commapi::{
 use common::schema::{
     diag::{dtc::ECUDTC, service::Service},
     variant::{ECUVariantDefinition, ECUVariantPattern},
-    ConType, Connection, OvdECU,
+    ConType, Connection, OvdECU, ServerType,
 };
 use core::panic;
 use iced::{time, Align, Column, Length, Row, Subscription};
@@ -39,6 +39,12 @@ pub enum JsonDiagSessionMsg {
     ReadErrors,
     ClearErrors,
     ReadInfo,
+    SetKwpSession(u8),
+    EnterSecurityLevel(String),
+    RequestSecuritySeed,
+    EnterSecuritySeed(String),
+    EnterSecurityKey(String),
+    SendSecurityKey,
     ExecuteService(ServiceRef, Vec<u8>),
     ClearLogs,
     Selector(SelectorMsg),
@@ -94,6 +100,18 @@ pub struct JsonDiagSession {
     btn1: iced::button::State,
     btn2: iced::button::State,
     btn3: iced::button::State,
+    kwp_default_btn: iced::button::State,
+    kwp_standby_btn: iced::button::State,
+    kwp_passive_btn: iced::button::State,
+    kwp_extended_btn: iced::button::State,
+    security_level: String,
+    security_seed: String,
+    security_key: String,
+    security_level_input: iced::text_input::State,
+    security_seed_input: iced::text_input::State,
+    security_key_input: iced::text_input::State,
+    security_seed_btn: iced::button::State,
+    security_key_btn: iced::button::State,
     page_state: TargetPage,
     tables: Vec<Table>,
 }
@@ -187,7 +205,13 @@ impl JsonDiagSession {
                     })
                     .collect();
 
-                let write_functions: Vec<ServiceRef> = Vec::new();
+                let write_functions: Vec<ServiceRef> = ecu_varient
+                    .functions
+                    .iter()
+                    .map(|s| ServiceRef {
+                        inner: RefCell::new(s.clone()),
+                    })
+                    .collect();
                 let actuation_functions: Vec<ServiceRef> = Vec::new();
 
                 Ok(Self {
@@ -205,6 +229,18 @@ impl JsonDiagSession {
                     btn1: iced::button::State::default(),
                     btn2: iced::button::State::default(),
                     btn3: iced::button::State::default(),
+                    kwp_default_btn: iced::button::State::default(),
+                    kwp_standby_btn: iced::button::State::default(),
+                    kwp_passive_btn: iced::button::State::default(),
+                    kwp_extended_btn: iced::button::State::default(),
+                    security_level: "01".into(),
+                    security_seed: String::new(),
+                    security_key: String::new(),
+                    security_level_input: iced::text_input::State::default(),
+                    security_seed_input: iced::text_input::State::default(),
+                    security_key_input: iced::text_input::State::default(),
+                    security_seed_btn: iced::button::State::default(),
+                    security_key_btn: iced::button::State::default(),
                     looping_service: None,
                     looping_text: String::new(),
                     logged_dtcs: Vec::new(),
@@ -221,8 +257,64 @@ impl JsonDiagSession {
 }
 
 impl JsonDiagSession {
+    fn security_level(value: &str) -> Result<u8, &'static str> {
+        match hex::decode(value) {
+            Ok(bytes) if bytes.len() == 1 => Ok(bytes[0]),
+            _ => Err("Security level must be exactly one hexadecimal byte, for example 01"),
+        }
+    }
+
     pub fn draw_main_ui(&mut self) -> iced::Element<'_, JsonDiagSessionMsg> {
         let mut btn_view = Column::new()
+            .push(text("Security Access (0x27)", TextType::Normal))
+            .push(
+                Row::new()
+                    .spacing(5)
+                    .push(
+                        text_input(
+                            &mut self.security_level_input,
+                            "Seed level",
+                            &self.security_level,
+                            JsonDiagSessionMsg::EnterSecurityLevel,
+                        )
+                        .width(Length::Units(90)),
+                    )
+                    .push(
+                        button_outlined(
+                            &mut self.security_seed_btn,
+                            "Request seed",
+                            ButtonType::Warning,
+                        )
+                        .on_press(JsonDiagSessionMsg::RequestSecuritySeed),
+                    )
+                    .push(
+                        text_input(
+                            &mut self.security_seed_input,
+                            "Returned seed",
+                            &self.security_seed,
+                            JsonDiagSessionMsg::EnterSecuritySeed,
+                        )
+                        .width(Length::Units(180)),
+                    )
+                    .push(
+                        text_input(
+                            &mut self.security_key_input,
+                            "Calculated key",
+                            &self.security_key,
+                            JsonDiagSessionMsg::EnterSecurityKey,
+                        )
+                        .width(Length::Units(180)),
+                    )
+                    .push(
+                        button_outlined(&mut self.security_key_btn, "Send key", ButtonType::Danger)
+                            .on_press(JsonDiagSessionMsg::SendSecurityKey),
+                    ),
+            )
+            .push(
+                self.service_selector
+                    .view()
+                    .map(JsonDiagSessionMsg::Selector),
+            )
             .push(
                 button_outlined(&mut self.btn1, "ECU Information", ButtonType::Primary)
                     .on_press(JsonDiagSessionMsg::ReadInfo),
@@ -233,11 +325,33 @@ impl JsonDiagSession {
                     .on_press(JsonDiagSessionMsg::ReadErrors),
             )
             .width(Length::FillPortion(1));
-        btn_view = btn_view.push(
-            self.service_selector
-                .view()
-                .map(JsonDiagSessionMsg::Selector),
-        );
+        if matches!(&self.connection_settings.server_type, ServerType::KWP2000) {
+            btn_view = btn_view.push(
+                Row::new()
+                    .spacing(5)
+                    .push(text("KWP session:", TextType::Normal))
+                    .push(
+                        button_outlined(&mut self.kwp_default_btn, "Default 81", ButtonType::Info)
+                            .on_press(JsonDiagSessionMsg::SetKwpSession(0x81)),
+                    )
+                    .push(
+                        button_outlined(&mut self.kwp_standby_btn, "Standby 89", ButtonType::Info)
+                            .on_press(JsonDiagSessionMsg::SetKwpSession(0x89)),
+                    )
+                    .push(
+                        button_outlined(&mut self.kwp_passive_btn, "Passive 90", ButtonType::Info)
+                            .on_press(JsonDiagSessionMsg::SetKwpSession(0x90)),
+                    )
+                    .push(
+                        button_outlined(
+                            &mut self.kwp_extended_btn,
+                            "Extended 92",
+                            ButtonType::Info,
+                        )
+                        .on_press(JsonDiagSessionMsg::SetKwpSession(0x92)),
+                    ),
+            );
+        }
         if self.looping_service.is_some() {
             btn_view = btn_view.push(text(&self.looping_text, TextType::Normal).size(14));
         }
@@ -535,6 +649,109 @@ impl SessionTrait for JsonDiagSession {
                     LogType::Error,
                 ),
             },
+
+            JsonDiagSessionMsg::SetKwpSession(mode) => match self.server.set_kwp_session(*mode) {
+                Ok(_) => self.log_view.add_msg(
+                    format!("KWP diagnostic session set to 0x{:02X}", mode),
+                    LogType::Info,
+                ),
+                Err(e) => self.log_view.add_msg(
+                    format!("Error setting KWP diagnostic session: {}", e.get_text()),
+                    LogType::Error,
+                ),
+            },
+
+            JsonDiagSessionMsg::EnterSecurityLevel(level) => {
+                self.security_level = level.to_uppercase();
+            }
+            JsonDiagSessionMsg::EnterSecuritySeed(seed) => {
+                self.security_seed = seed.to_uppercase();
+            }
+            JsonDiagSessionMsg::EnterSecurityKey(key) => {
+                self.security_key = key.to_uppercase();
+            }
+            JsonDiagSessionMsg::RequestSecuritySeed => {
+                let level = match Self::security_level(&self.security_level) {
+                    Ok(level) => level,
+                    Err(error) => {
+                        self.log_view.add_msg(error, LogType::Error);
+                        return None;
+                    }
+                };
+                match self.server.run_cmd(0x27, &[level]) {
+                    Ok(response)
+                        if response.len() >= 2 && response[0] == 0x67 && response[1] == level =>
+                    {
+                        self.security_seed = hex::encode_upper(&response[2..]);
+                        self.log_view.add_msg(
+                            format!(
+                                "Security seed for level {:02X}: {}",
+                                level, self.security_seed
+                            ),
+                            LogType::Info,
+                        );
+                    }
+                    Ok(response) => self.log_view.add_msg(
+                        format!(
+                            "Unexpected Security Access seed response: {:02X?}",
+                            response
+                        ),
+                        LogType::Error,
+                    ),
+                    Err(error) => self.log_view.add_msg(
+                        format!(
+                            "Error requesting Security Access seed: {}",
+                            error.get_text()
+                        ),
+                        LogType::Error,
+                    ),
+                }
+            }
+            JsonDiagSessionMsg::SendSecurityKey => {
+                let seed_level = match Self::security_level(&self.security_level) {
+                    Ok(level) => level,
+                    Err(error) => {
+                        self.log_view.add_msg(error, LogType::Error);
+                        return None;
+                    }
+                };
+                let key_level = match seed_level.checked_add(1) {
+                    Some(level) => level,
+                    None => {
+                        self.log_view
+                            .add_msg("Security level must be below FF", LogType::Error);
+                        return None;
+                    }
+                };
+                let key = match hex::decode(&self.security_key) {
+                    Ok(key) if !key.is_empty() => key,
+                    _ => {
+                        self.log_view
+                            .add_msg("Enter a non-empty hexadecimal security key", LogType::Error);
+                        return None;
+                    }
+                };
+                let mut request = vec![key_level];
+                request.extend(key);
+                match self.server.run_cmd(0x27, &request) {
+                    Ok(response)
+                        if response.len() >= 2
+                            && response[0] == 0x67
+                            && response[1] == key_level =>
+                    {
+                        self.log_view
+                            .add_msg("Security Access unlocked", LogType::Info);
+                    }
+                    Ok(response) => self.log_view.add_msg(
+                        format!("Unexpected Security Access key response: {:02X?}", response),
+                        LogType::Error,
+                    ),
+                    Err(error) => self.log_view.add_msg(
+                        format!("Error sending Security Access key: {}", error.get_text()),
+                        LogType::Error,
+                    ),
+                }
+            }
 
             JsonDiagSessionMsg::Selector(s) => match s {
                 SelectorMsg::PickLoopService(l) => self.looping_service = Some(l.clone()),
