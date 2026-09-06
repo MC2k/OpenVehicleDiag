@@ -26,6 +26,7 @@ use super::diag_home::{ECUDiagSettings, VehicleECUList};
 #[derive(Debug, Clone)]
 pub enum DiagScannerMessage {
     IncrementStage,
+    ToggleBatteryVoltageCheck,
     ScanPoll,
     SaveResults,
 }
@@ -36,6 +37,8 @@ pub struct DiagScanner {
     activate_interface: DynamicInterface,
     curr_stage: usize,
     btn: iced::button::State,
+    battery_check_btn: iced::button::State,
+    battery_voltage_check: bool,
     status: String,
     filter_idx: u32,
     clock: Instant,
@@ -55,6 +58,8 @@ impl DiagScanner {
             activate_interface: DynamicInterface::blank(),
             curr_stage: 0,
             btn: Default::default(),
+            battery_check_btn: Default::default(),
+            battery_voltage_check: true,
             status: String::new(),
             filter_idx: 0,
             clock: Instant::now(),
@@ -71,7 +76,9 @@ impl DiagScanner {
     fn increment_stage(&mut self) -> Option<DiagScannerMessage> {
         match self.curr_stage {
             0 => {
-                if self.adapter.read_battery_voltage().unwrap_or(0.0) < 11.7 {
+                if self.battery_voltage_check
+                    && self.adapter.read_battery_voltage().unwrap_or(0.0) < 11.7
+                {
                     self.status = "Battery voltage too low / Could not read battery voltage".into();
                     return None;
                 }
@@ -430,6 +437,10 @@ impl DiagScanner {
         self.status.clear();
         match msg {
             DiagScannerMessage::IncrementStage => self.increment_stage(),
+            DiagScannerMessage::ToggleBatteryVoltageCheck => {
+                self.battery_voltage_check = !self.battery_voltage_check;
+                None
+            }
             DiagScannerMessage::ScanPoll => self.poll(),
             DiagScannerMessage::SaveResults => {
                 self.save_attempted = true;
@@ -491,16 +502,34 @@ impl DiagScanner {
     }
 
     fn draw_stage_0(&mut self) -> Element<'_, DiagScannerMessage> {
+        let battery_warning = if self.battery_voltage_check {
+            "1. Ensure your battery is charged (Scan will terminate if battery voltage falls below 11.7V)"
+        } else {
+            "1. Battery voltage check disabled (make sure the battery is charged before scanning)"
+        };
         let mut c = Column::new().padding(10).spacing(10).align_items(Align::Start).width(Length::Fill)
             .push(title_text("IMPORTANT", crate::themes::TitleSize::P2))
             .push(text("OpenVehicleDiag is going to scan your car for \
                 KWP2000/UDS compatible ECUs that use ISO-TP. This will take some time. Before starting, please do the following:", TextType::Normal))
-            .push(text("1. Ensure your battery is charged (Scan will terminate if battery voltage falls below 11.7V)", TextType::Normal))
+            .push(text(battery_warning, TextType::Normal))
             .push(text("2. Ensure your car is in the ignition position (Engine Off!)", TextType::Normal))
             .push(Space::with_height(Length::Units(50)))
             .push(text("If you see any warnings appear on your dashboard, do NOT panic!", TextType::Danger))
             .push(Space::with_height(Length::Units(50)))
-            .push(button_coloured(&mut self.btn, "Start the scan", ButtonType::Warning).on_press(DiagScannerMessage::IncrementStage))
+            .push(Row::new()
+                .spacing(10)
+                .push(button_coloured(&mut self.btn, "Start the scan", ButtonType::Warning)
+                    .on_press(DiagScannerMessage::IncrementStage))
+                .push(button_outlined(
+                    &mut self.battery_check_btn,
+                    if self.battery_voltage_check {
+                        "Disable battery voltage check"
+                    } else {
+                        "Enable battery voltage check"
+                    },
+                    ButtonType::Info,
+                )
+                .on_press(DiagScannerMessage::ToggleBatteryVoltageCheck)))
             .push(Space::with_height(Length::Units(50)));
 
         if !self.status.is_empty() {
