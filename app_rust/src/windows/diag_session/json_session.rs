@@ -327,7 +327,48 @@ impl JsonDiagSession {
     }
 
     pub fn draw_main_ui(&mut self) -> iced::Element<'_, JsonDiagSessionMsg> {
-        let mut btn_view = Column::new()
+        let mut btn_view = Column::new();
+        if matches!(&self.connection_settings.server_type, ServerType::KWP2000) {
+            btn_view = btn_view.push(
+                Row::new()
+                    .spacing(5)
+                    .push(text("KWP session:", TextType::Normal))
+                    .push(
+                        button_outlined(&mut self.kwp_default_btn, "Default 81", ButtonType::Info)
+                            .on_press(JsonDiagSessionMsg::SetKwpSession(0x81)),
+                    )
+                    .push(
+                        button_outlined(&mut self.kwp_standby_btn, "Standby 89", ButtonType::Info)
+                            .on_press(JsonDiagSessionMsg::SetKwpSession(0x89)),
+                    )
+                    .push(
+                        button_outlined(&mut self.kwp_passive_btn, "Passive 90", ButtonType::Info)
+                            .on_press(JsonDiagSessionMsg::SetKwpSession(0x90)),
+                    )
+                    .push(
+                        button_outlined(
+                            &mut self.kwp_extended_btn,
+                            "Extended 92",
+                            ButtonType::Info,
+                        )
+                        .on_press(JsonDiagSessionMsg::SetKwpSession(0x92)),
+                    ),
+            );
+        }
+        if self.variant_options.len() > 1 {
+            btn_view = btn_view.push(
+                Row::new()
+                    .spacing(5)
+                    .push(text("ECU variant:", TextType::Normal))
+                    .push(picklist(
+                        &mut self.variant_picker,
+                        &self.variant_options,
+                        Some(self.selected_variant.clone()),
+                        JsonDiagSessionMsg::SelectVariant,
+                    )),
+            );
+        }
+        btn_view = btn_view
             .push(text("Security Access (0x27)", TextType::Normal))
             .push(
                 Row::new()
@@ -387,46 +428,6 @@ impl JsonDiagSession {
                     .on_press(JsonDiagSessionMsg::ReadErrors),
             )
             .width(Length::FillPortion(1));
-        if matches!(&self.connection_settings.server_type, ServerType::KWP2000) {
-            btn_view = btn_view.push(
-                Row::new()
-                    .spacing(5)
-                    .push(text("KWP session:", TextType::Normal))
-                    .push(
-                        button_outlined(&mut self.kwp_default_btn, "Default 81", ButtonType::Info)
-                            .on_press(JsonDiagSessionMsg::SetKwpSession(0x81)),
-                    )
-                    .push(
-                        button_outlined(&mut self.kwp_standby_btn, "Standby 89", ButtonType::Info)
-                            .on_press(JsonDiagSessionMsg::SetKwpSession(0x89)),
-                    )
-                    .push(
-                        button_outlined(&mut self.kwp_passive_btn, "Passive 90", ButtonType::Info)
-                            .on_press(JsonDiagSessionMsg::SetKwpSession(0x90)),
-                    )
-                    .push(
-                        button_outlined(
-                            &mut self.kwp_extended_btn,
-                            "Extended 92",
-                            ButtonType::Info,
-                        )
-                        .on_press(JsonDiagSessionMsg::SetKwpSession(0x92)),
-                    ),
-            );
-        }
-        if self.variant_options.len() > 1 {
-            btn_view = btn_view.push(
-                Row::new()
-                    .spacing(5)
-                    .push(text("ECU variant:", TextType::Normal))
-                    .push(picklist(
-                        &mut self.variant_picker,
-                        &self.variant_options,
-                        Some(self.selected_variant.clone()),
-                        JsonDiagSessionMsg::SelectVariant,
-                    )),
-            );
-        }
         if self.looping_service.is_some() {
             btn_view = btn_view.push(text(&self.looping_text, TextType::Normal).size(14));
         }
