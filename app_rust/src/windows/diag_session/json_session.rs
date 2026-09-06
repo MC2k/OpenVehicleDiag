@@ -36,6 +36,7 @@ const MAX_TABLES: usize = 3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsonDiagSessionMsg {
+    SelectVariant(VariantChoice),
     ReadErrors,
     ClearErrors,
     ReadInfo,
@@ -51,6 +52,18 @@ pub enum JsonDiagSessionMsg {
     LoopRead(Instant),
     Navigate(TargetPage),
     Select(usize, usize, usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantChoice {
+    index: usize,
+    label: String,
+}
+
+impl ToString for VariantChoice {
+    fn to_string(&self) -> String {
+        self.label.clone()
+    }
 }
 
 impl From<SelectorMsg> for JsonDiagSessionMsg {
@@ -89,6 +102,10 @@ pub enum TargetPage {
 pub struct JsonDiagSession {
     connection_settings: Connection,
     server: DiagServer,
+    available_variants: Vec<ECUVariantDefinition>,
+    variant_options: Vec<VariantChoice>,
+    selected_variant: VariantChoice,
+    variant_picker: iced::pick_list::State<VariantChoice>,
     ecu_text: (String, String),
     ecu_data: ECUVariantDefinition,
     pattern: ECUVariantPattern,
@@ -114,6 +131,25 @@ pub struct JsonDiagSession {
     security_key_btn: iced::button::State,
     page_state: TargetPage,
     tables: Vec<Table>,
+}
+
+fn service_selector_for_variant(variant: &ECUVariantDefinition) -> ServiceSelector {
+    let read_functions = variant
+        .downloads
+        .iter()
+        .map(|service| ServiceRef {
+            inner: RefCell::new(service.clone()),
+        })
+        .collect();
+    let write_functions = variant
+        .functions
+        .iter()
+        .map(|service| ServiceRef {
+            inner: RefCell::new(service.clone()),
+        })
+        .collect();
+
+    ServiceSelector::new(read_functions, write_functions, Vec::new())
 }
 
 impl JsonDiagSession {
@@ -170,27 +206,49 @@ impl JsonDiagSession {
         match create_server {
             Ok(server) => {
                 println!("Server started");
-                let variant = server.get_variant_id()? as u32;
-                let ecu_varient = ecu_data
+                // Some ECUs reject the optional KWP2000 identification service (0x1A).
+                // Keep the session usable and fall back to the first CBF variant.
+                let variant = match server.get_variant_id() {
+                    Ok(variant) => Some(variant as u32),
+                    Err(error) => {
+                        eprintln!("WARNING. ECU variant identification failed: {}", error.get_text());
+                        None
+                    }
+                };
+                let selected_variant_index = ecu_data
                     .variants
-                    .clone()
-                    .into_iter()
-                    .find(|x| {
-                        x.clone()
-                            .patterns
-                            .into_iter()
-                            .any(|p| p.vendor_id == variant)
+                    .iter()
+                    .position(|x| {
+                        variant.map_or(false, |variant| {
+                            x.patterns.iter().any(|p| p.vendor_id == variant)
+                        })
                     })
                     .unwrap_or_else(|| {
                         eprintln!("WARNING. Unknown ECU Variant!");
-                        ecu_data.variants[0].clone()
+                        0
                     });
-                let pattern = &ecu_varient
+                let ecu_varient = ecu_data
+                    .variants
+                    .get(selected_variant_index)
+                    .cloned()
+                    .ok_or_else(|| SessionError::Other("ECU has no variants".into()))?;
+                let pattern = ecu_varient
                     .patterns
                     .iter()
-                    .find(|x| x.vendor_id == variant)
-                    .unwrap()
+                    .find(|x| variant.map_or(false, |variant| x.vendor_id == variant))
+                    .or_else(|| ecu_varient.patterns.first())
+                    .ok_or_else(|| SessionError::Other("ECU variant has no identification patterns".into()))?
                     .clone();
+                let available_variants = ecu_data.variants.clone();
+                let variant_options: Vec<VariantChoice> = available_variants
+                    .iter()
+                    .enumerate()
+                    .map(|(index, variant)| VariantChoice {
+                        index,
+                        label: format!("{} - {}", variant.name, variant.description),
+                    })
+                    .collect();
+                let selected_variant = variant_options[selected_variant_index].clone();
                 println!(
                     "ECU Variant: {} (Vendor: {})",
                     ecu_varient.name, pattern.vendor
@@ -218,6 +276,10 @@ impl JsonDiagSession {
                     connection_settings: connection_settings,
                     ecu_text: (ecu_data.name, ecu_data.description),
                     server,
+                    available_variants,
+                    variant_options,
+                    selected_variant,
+                    variant_picker: Default::default(),
                     ecu_data: ecu_varient,
                     pattern: pattern.clone(),
                     service_selector: ServiceSelector::new(
@@ -350,6 +412,19 @@ impl JsonDiagSession {
                         )
                         .on_press(JsonDiagSessionMsg::SetKwpSession(0x92)),
                     ),
+            );
+        }
+        if self.variant_options.len() > 1 {
+            btn_view = btn_view.push(
+                Row::new()
+                    .spacing(5)
+                    .push(text("ECU variant:", TextType::Normal))
+                    .push(picklist(
+                        &mut self.variant_picker,
+                        &self.variant_options,
+                        Some(self.selected_variant.clone()),
+                        JsonDiagSessionMsg::SelectVariant,
+                    )),
             );
         }
         if self.looping_service.is_some() {
@@ -505,6 +580,22 @@ impl SessionTrait for JsonDiagSession {
     fn update(&mut self, msg: &Self::Msg) -> Option<Self::Msg> {
         //self.log_view.clear_logs();
         match msg {
+            JsonDiagSessionMsg::SelectVariant(choice) => {
+                if let Some(variant) = self.available_variants.get(choice.index).cloned() {
+                    if let Some(pattern) = variant.patterns.first().cloned() {
+                        self.ecu_data = variant.clone();
+                        self.pattern = pattern;
+                        self.selected_variant = choice.clone();
+                        self.service_selector = service_selector_for_variant(&variant);
+                        self.looping_service = None;
+                    } else {
+                        self.log_view.add_msg(
+                            "Selected ECU variant has no identification pattern",
+                            LogType::Error,
+                        );
+                    }
+                }
+            }
             JsonDiagSessionMsg::Navigate(target) => self.page_state = *target,
             JsonDiagSessionMsg::ReadInfo => {
                 let header: Vec<String> = vec!["".into(), "".into()];
